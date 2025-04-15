@@ -6,11 +6,18 @@ from typing import Optional
 import torch
 
 class TranscriptionService:
+    SUPPORTED_LANGUAGES = {
+        "Português": "pt",
+        "English": "en",
+        "Español": "es"
+    }
+    
     def __init__(self, audio_queue: Queue, text_queue: Queue, model_size: str = "base"):
         self.audio_queue = audio_queue
         self.text_queue = text_queue
         self.running = False
         self.processing_thread: Optional[threading.Thread] = None
+        self.language = "en"  # default language
         
         # Initialize Whisper model
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -21,6 +28,11 @@ class TranscriptionService:
             device=device,
             compute_type=compute_type
         )
+    
+    def set_language(self, language_name: str) -> None:
+        """Set the transcription language."""
+        if language_name in self.SUPPORTED_LANGUAGES:
+            self.language = self.SUPPORTED_LANGUAGES[language_name]
     
     def process_audio(self) -> None:
         """Process audio chunks and transcribe them."""
@@ -36,7 +48,7 @@ class TranscriptionService:
                     audio_data = np.array(audio_buffer)
                     segments, _ = self.model.transcribe(
                         audio_data,
-                        language="en",
+                        language=self.language,
                         vad_filter=True
                     )
                     

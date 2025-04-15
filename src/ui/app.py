@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from typing import Optional
+from typing import Optional, List
 from ..services.audio_service import AudioService
 from ..services.transcription_service import TranscriptionService
 from ..services.translation_service import TranslationService
@@ -31,6 +31,7 @@ class VoxaApp(ctk.CTk):
         self.is_recording = False
         self.recording_thread: Optional[threading.Thread] = None
         self.should_translate = False
+        self.languages = list(TranscriptionService.SUPPORTED_LANGUAGES.keys())
         
         self._create_widgets()
         self._create_layout()
@@ -47,6 +48,41 @@ class VoxaApp(ctk.CTk):
             text=self.audio_service.get_status(),
             font=("Segoe UI", 12),
             wraplength=180
+        )
+        
+        # Create language selection frame
+        self.lang_frame = ctk.CTkFrame(self.sidebar)
+        
+        # Source language selection
+        self.source_lang_label = ctk.CTkLabel(
+            self.lang_frame,
+            text="Idioma origem:",
+            font=("Segoe UI", 12)
+        )
+        
+        self.source_lang_var = ctk.StringVar(value="English")
+        self.source_lang_menu = ctk.CTkOptionMenu(
+            self.lang_frame,
+            values=self.languages,
+            variable=self.source_lang_var,
+            command=self._on_language_change,
+            width=140
+        )
+        
+        # Target language selection (only visible when translation is enabled)
+        self.target_lang_label = ctk.CTkLabel(
+            self.lang_frame,
+            text="Idioma destino:",
+            font=("Segoe UI", 12)
+        )
+        
+        self.target_lang_var = ctk.StringVar(value="Português")
+        self.target_lang_menu = ctk.CTkOptionMenu(
+            self.lang_frame,
+            values=self.languages,
+            variable=self.target_lang_var,
+            command=self._on_language_change,
+            width=140
         )
         
         # Create control buttons
@@ -87,12 +123,12 @@ class VoxaApp(ctk.CTk):
         # Create labels
         self.transcription_label = ctk.CTkLabel(
             self.main_content,
-            text="English Transcription",
+            text="Transcription",
             font=("Segoe UI", 14, "bold")
         )
         self.translation_label = ctk.CTkLabel(
             self.main_content,
-            text="Portuguese Translation",
+            text="Translation",
             font=("Segoe UI", 14, "bold")
         )
         
@@ -115,11 +151,19 @@ class VoxaApp(ctk.CTk):
         self.main_content.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         
         # Configure sidebar
-        self.sidebar.grid_rowconfigure(5, weight=1)
+        self.sidebar.grid_rowconfigure(6, weight=1)
         self.status_label.grid(row=0, column=0, padx=10, pady=(10, 5))
-        self.record_button.grid(row=1, column=0, padx=10, pady=10)
-        self.translate_checkbox.grid(row=2, column=0, padx=10, pady=10)
-        self.help_text.grid(row=3, column=0, padx=10, pady=(10, 5))
+        
+        # Language selection frame
+        self.lang_frame.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
+        self.source_lang_label.grid(row=0, column=0, padx=5, pady=(5,0), sticky="w")
+        self.source_lang_menu.grid(row=1, column=0, padx=5, pady=(0,5))
+        self.target_lang_label.grid(row=2, column=0, padx=5, pady=(5,0), sticky="w")
+        self.target_lang_menu.grid(row=3, column=0, padx=5, pady=(0,5))
+        
+        self.record_button.grid(row=2, column=0, padx=10, pady=10)
+        self.translate_checkbox.grid(row=3, column=0, padx=10, pady=10)
+        self.help_text.grid(row=4, column=0, padx=10, pady=(10, 5))
         
         # Configure main content
         self.main_content.grid_columnconfigure(0, weight=1)
@@ -130,27 +174,63 @@ class VoxaApp(ctk.CTk):
         self.transcription_label.grid(row=0, column=0, padx=10, pady=(10, 5))
         self.transcription_text.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="nsew")
         
-        # Initially hide translation widgets
+        # Initially hide translation widgets and update language visibility
         self._update_translation_visibility()
+        self._update_language_labels()
+    
+    def _on_language_change(self, _: str = None) -> None:
+        """Handle language selection change."""
+        source_lang = self.source_lang_var.get()
+        target_lang = self.target_lang_var.get()
+        
+        # Update services
+        self.transcription_service.set_language(source_lang)
+        if self.should_translate:
+            self.translation_service.set_languages(source_lang, target_lang)
+        
+        # Update labels
+        self._update_language_labels()
+    
+    def _update_language_labels(self) -> None:
+        """Update the labels to show the selected languages."""
+        source_lang = self.source_lang_var.get()
+        self.transcription_label.configure(text=f"Transcrição ({source_lang})")
+        
+        if self.should_translate:
+            target_lang = self.target_lang_var.get()
+            self.translation_label.configure(text=f"Tradução ({target_lang})")
     
     def _on_translate_toggle(self):
         """Handle translation checkbox toggle."""
         self.should_translate = self.translate_var.get()
         self._update_translation_visibility()
+        
+        if self.should_translate:
+            # Update translation service with current languages
+            self.translation_service.set_languages(
+                self.source_lang_var.get(),
+                self.target_lang_var.get()
+            )
     
     def _update_translation_visibility(self):
         """Update visibility of translation widgets based on checkbox state."""
         if self.should_translate:
+            self.target_lang_label.grid()
+            self.target_lang_menu.grid()
             self.translation_label.grid(row=2, column=0, padx=10, pady=(10, 5))
             self.translation_text.grid(row=3, column=0, padx=10, pady=(0, 10), sticky="nsew")
             # Adjust transcription height
             self.transcription_text.configure(height=250)
             self.translation_text.configure(height=250)
         else:
+            self.target_lang_label.grid_remove()
+            self.target_lang_menu.grid_remove()
             self.translation_label.grid_remove()
             self.translation_text.grid_remove()
             # Make transcription use full height
             self.transcription_text.configure(height=520)
+        
+        self._update_language_labels()
     
     def _toggle_recording(self):
         if not self.is_recording:
