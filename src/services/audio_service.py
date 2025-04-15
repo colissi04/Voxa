@@ -72,7 +72,7 @@ class AudioService:
     def start_recording(self) -> None:
         """Start recording audio from VB-Cable Output."""
         if self.cable_device is None:
-            raise ValueError("VB-Cable not found. Please install VB-Cable from https://vb-audio.com/Cable/")
+            raise ValueError("VB-Cable não encontrado. Por favor instale o VB-Cable de https://vb-audio.com/Cable/")
         
         self.recording = True
         self.stream = sd.InputStream(
@@ -96,5 +96,5 @@ class AudioService:
     def get_status(self) -> str:
         """Get the current status of the audio service."""
         if self.cable_device is None:
-            return "VB-Cable not found. Please install VB-Cable from https://vb-audio.com/Cable/"
-        return "Ready to record" 
+            return "VB-Cable não encontrado. Por favor instale o VB-Cable de https://vb-audio.com/Cable/"
+        return "Pronto para gravar" 

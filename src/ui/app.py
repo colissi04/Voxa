@@ -6,13 +6,16 @@ from ..services.translation_service import TranslationService
 from ..core.conversation_manager import ConversationManager
 import queue
 import threading
+from tkinter import filedialog
+import os
+from datetime import datetime
 
 class VoxaApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
         # Configure window
-        self.title("Voxa - Real-time Translation")
+        self.title("Voxa - Transcrição e Tradução em Tempo Real")
         self.geometry("800x600")
         
         # Configure theme
@@ -132,13 +135,23 @@ class VoxaApp(ctk.CTk):
             font=("Segoe UI", 14, "bold")
         )
         
-        # Create help text
-        self.help_text = ctk.CTkLabel(
-            self.sidebar,
-            text="1. Install VB-Cable\n2. Set your app's audio output to CABLE Input\n3. Click Start Recording",
-            font=("Segoe UI", 12),
-            wraplength=180,
-            justify="left"
+        # Create buttons frame
+        self.buttons_frame = ctk.CTkFrame(self.sidebar)
+        
+        # Clear button
+        self.clear_button = ctk.CTkButton(
+            self.buttons_frame,
+            text="Limpar",
+            command=self._clear_text,
+            width=140
+        )
+        
+        # Save button
+        self.save_button = ctk.CTkButton(
+            self.buttons_frame,
+            text="Salvar",
+            command=self._show_save_dialog,
+            width=140
         )
     
     def _create_layout(self):
@@ -163,7 +176,11 @@ class VoxaApp(ctk.CTk):
         
         self.record_button.grid(row=2, column=0, padx=10, pady=10)
         self.translate_checkbox.grid(row=3, column=0, padx=10, pady=10)
-        self.help_text.grid(row=4, column=0, padx=10, pady=(10, 5))
+        
+        # Buttons frame
+        self.buttons_frame.grid(row=4, column=0, padx=10, pady=5, sticky="ew")
+        self.clear_button.grid(row=0, column=0, padx=5, pady=5)
+        self.save_button.grid(row=1, column=0, padx=5, pady=5)
         
         # Configure main content
         self.main_content.grid_columnconfigure(0, weight=1)
@@ -286,6 +303,66 @@ class VoxaApp(ctk.CTk):
             self.conversation_manager.add_entry(transcription, translation)
         else:
             self.conversation_manager.add_entry(transcription, None)
+    
+    def _clear_text(self):
+        """Clear all text areas."""
+        self.transcription_text.delete("1.0", "end")
+        self.translation_text.delete("1.0", "end")
+    
+    def _show_save_dialog(self):
+        """Show dialog to save text content."""
+        # Create dialog window
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Salvar Texto")
+        dialog.geometry("300x200")
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # Create checkboxes
+        save_transcript_var = ctk.BooleanVar(value=True)
+        save_translation_var = ctk.BooleanVar(value=self.should_translate)
+        
+        save_transcript_cb = ctk.CTkCheckBox(
+            dialog,
+            text="Salvar transcrição",
+            variable=save_transcript_var,
+            font=("Segoe UI", 12)
+        )
+        save_transcript_cb.grid(row=0, column=0, padx=20, pady=(20,10))
+        
+        if self.should_translate:
+            save_translation_cb = ctk.CTkCheckBox(
+                dialog,
+                text="Salvar tradução",
+                variable=save_translation_var,
+                font=("Segoe UI", 12)
+            )
+            save_translation_cb.grid(row=1, column=0, padx=20, pady=10)
+        
+        def save_files():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            directory = filedialog.askdirectory()
+            
+            if directory:
+                if save_transcript_var.get():
+                    transcript_path = os.path.join(directory, f"transcript_{timestamp}.txt")
+                    with open(transcript_path, "w", encoding="utf-8") as f:
+                        f.write(self.transcription_text.get("1.0", "end"))
+                
+                if save_translation_var.get() and self.should_translate:
+                    translation_path = os.path.join(directory, f"translation_{timestamp}.txt")
+                    with open(translation_path, "w", encoding="utf-8") as f:
+                        f.write(self.translation_text.get("1.0", "end"))
+            
+            dialog.destroy()
+        
+        # Create save button
+        save_button = ctk.CTkButton(
+            dialog,
+            text="Salvar",
+            command=save_files
+        )
+        save_button.grid(row=2, column=0, padx=20, pady=20)
     
     def run(self):
         self.mainloop() 
