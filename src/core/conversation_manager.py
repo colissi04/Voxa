@@ -1,36 +1,29 @@
-from dataclasses import dataclass
+from typing import List, Dict, Optional
 from datetime import datetime
-from typing import List, Optional
 import json
 import os
 
-@dataclass
-class ConversationEntry:
-    timestamp: datetime
-    original_text: str
-    translated_text: str
-
 class ConversationManager:
     def __init__(self, save_dir: Optional[str] = None):
-        self.entries: List[ConversationEntry] = []
+        self.entries: List[Dict] = []
         self.save_dir = save_dir or os.path.join(os.path.expanduser("~"), "voxa_history")
         os.makedirs(self.save_dir, exist_ok=True)
     
-    def add_entry(self, original_text: str, translated_text: str) -> None:
+    def add_entry(self, transcription: str, translation: Optional[str] = None) -> None:
         """Add a new conversation entry."""
-        entry = ConversationEntry(
-            timestamp=datetime.now(),
-            original_text=original_text,
-            translated_text=translated_text
-        )
+        entry = {
+            'timestamp': datetime.now(),
+            'transcription': transcription,
+            'translation': translation
+        }
         self.entries.append(entry)
         self._auto_save()
     
-    def get_history(self) -> List[ConversationEntry]:
+    def get_entries(self) -> List[Dict]:
         """Get all conversation entries."""
         return self.entries
     
-    def clear_history(self) -> None:
+    def clear(self) -> None:
         """Clear all conversation entries."""
         self.entries = []
         self._auto_save()
@@ -42,9 +35,9 @@ class ConversationManager:
         
         history_data = [
             {
-                "timestamp": entry.timestamp.isoformat(),
-                "original_text": entry.original_text,
-                "translated_text": entry.translated_text
+                "timestamp": entry['timestamp'].isoformat(),
+                "transcription": entry['transcription'],
+                "translation": entry['translation']
             }
             for entry in self.entries
         ]
@@ -67,10 +60,20 @@ class ConversationManager:
             history_data = json.load(f)
         
         self.entries = [
-            ConversationEntry(
-                timestamp=datetime.fromisoformat(entry["timestamp"]),
-                original_text=entry["original_text"],
-                translated_text=entry["translated_text"]
-            )
+            {
+                'timestamp': datetime.fromisoformat(entry["timestamp"]),
+                'transcription': entry["transcription"],
+                'translation': entry["translation"]
+            }
             for entry in history_data
-        ] 
+        ]
+    
+    def save_to_file(self, filename: str) -> None:
+        """Save conversation to a file."""
+        with open(filename, 'w', encoding='utf-8') as f:
+            for entry in self.entries:
+                f.write(f"[{entry['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}]\n")
+                f.write(f"Transcription: {entry['transcription']}\n")
+                if entry['translation']:
+                    f.write(f"Translation: {entry['translation']}\n")
+                f.write("\n") 

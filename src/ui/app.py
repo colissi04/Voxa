@@ -30,6 +30,7 @@ class VoxaApp(ctk.CTk):
         # Initialize UI state
         self.is_recording = False
         self.recording_thread: Optional[threading.Thread] = None
+        self.should_translate = False
         
         self._create_widgets()
         self._create_layout()
@@ -54,6 +55,21 @@ class VoxaApp(ctk.CTk):
             text="Start Recording",
             command=self._toggle_recording,
             state="normal" if self.audio_service.cable_device is not None else "disabled"
+        )
+        
+        # Create translation checkbox
+        self.translate_var = ctk.BooleanVar(value=False)
+        self.translate_checkbox = ctk.CTkCheckBox(
+            self.sidebar,
+            text="Traduzir",
+            variable=self.translate_var,
+            command=self._on_translate_toggle,
+            font=("Segoe UI", 12),
+            width=20,
+            height=20,
+            checkbox_width=16,
+            checkbox_height=16,
+            corner_radius=4
         )
         
         # Create text areas
@@ -99,10 +115,11 @@ class VoxaApp(ctk.CTk):
         self.main_content.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         
         # Configure sidebar
-        self.sidebar.grid_rowconfigure(4, weight=1)
+        self.sidebar.grid_rowconfigure(5, weight=1)
         self.status_label.grid(row=0, column=0, padx=10, pady=(10, 5))
         self.record_button.grid(row=1, column=0, padx=10, pady=10)
-        self.help_text.grid(row=2, column=0, padx=10, pady=(10, 5))
+        self.translate_checkbox.grid(row=2, column=0, padx=10, pady=10)
+        self.help_text.grid(row=3, column=0, padx=10, pady=(10, 5))
         
         # Configure main content
         self.main_content.grid_columnconfigure(0, weight=1)
@@ -112,8 +129,28 @@ class VoxaApp(ctk.CTk):
         # Place widgets in main content
         self.transcription_label.grid(row=0, column=0, padx=10, pady=(10, 5))
         self.transcription_text.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="nsew")
-        self.translation_label.grid(row=2, column=0, padx=10, pady=(10, 5))
-        self.translation_text.grid(row=3, column=0, padx=10, pady=(0, 10), sticky="nsew")
+        
+        # Initially hide translation widgets
+        self._update_translation_visibility()
+    
+    def _on_translate_toggle(self):
+        """Handle translation checkbox toggle."""
+        self.should_translate = self.translate_var.get()
+        self._update_translation_visibility()
+    
+    def _update_translation_visibility(self):
+        """Update visibility of translation widgets based on checkbox state."""
+        if self.should_translate:
+            self.translation_label.grid(row=2, column=0, padx=10, pady=(10, 5))
+            self.translation_text.grid(row=3, column=0, padx=10, pady=(0, 10), sticky="nsew")
+            # Adjust transcription height
+            self.transcription_text.configure(height=250)
+            self.translation_text.configure(height=250)
+        else:
+            self.translation_label.grid_remove()
+            self.translation_text.grid_remove()
+            # Make transcription use full height
+            self.transcription_text.configure(height=520)
     
     def _toggle_recording(self):
         if not self.is_recording:
@@ -148,20 +185,27 @@ class VoxaApp(ctk.CTk):
                 try:
                     text = self.text_queue.get(timeout=0.1)
                     if text:
-                        translation = self.translation_service.translate(text)
-                        self.update_ui(text, translation)
+                        if self.should_translate:
+                            translation = self.translation_service.translate(text)
+                            self.update_ui(text, translation)
+                        else:
+                            self.update_ui(text, None)
                 except queue.Empty:
                     continue
         
         self.processing_thread = threading.Thread(target=process_text, daemon=True)
         self.processing_thread.start()
     
-    def update_ui(self, transcription: str, translation: str):
+    def update_ui(self, transcription: str, translation: Optional[str] = None):
         self.transcription_text.insert("end", transcription + "\n")
         self.transcription_text.see("end")
-        self.translation_text.insert("end", translation + "\n")
-        self.translation_text.see("end")
-        self.conversation_manager.add_entry(transcription, translation)
+        
+        if translation and self.should_translate:
+            self.translation_text.insert("end", translation + "\n")
+            self.translation_text.see("end")
+            self.conversation_manager.add_entry(transcription, translation)
+        else:
+            self.conversation_manager.add_entry(transcription, None)
     
     def run(self):
         self.mainloop() 
